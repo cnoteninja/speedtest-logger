@@ -20,6 +20,15 @@ python speed_report.py
 
 # SLA-style outage & degradation analysis (Markdown + HTML)
 python outage_report.py
+
+# Turn the outage data into a ready-to-send ISP complaint letter
+python complaint_letter.py
+
+# Local read-only web dashboard
+python dashboard.py --serve        # http://127.0.0.1:8000/
+
+# Sanity-check the setup before scheduling the logger
+python check_setup.py
 ```
 
 Open `speed.html`. That's your evidence.
@@ -88,6 +97,90 @@ timestamp stored in `.outage_state.json` alert — run once **without**
 `--webhook-url` first to seed the state, or you'll get alerts for old history.
 A failed POST doesn't mark the window as alerted, so it retries next run.
 
+## ISP complaint letter
+
+`complaint_letter.py` reads `speedlog.csv`, runs the same outage analysis
+as `outage_report.py`, and writes a formal complaint letter in **both
+Markdown and plain text** (`complaint_letter.md`, `complaint_letter.txt`).
+The body lists outage windows with dates and durations, uptime %,
+measured-vs-advertised speed summary, and degradation episodes — with
+placeholders for your personal details. Fill them in before sending.
+
+```bash
+python complaint_letter.py                     # real data
+python complaint_letter.py --demo              # sample data -> complaint_letter-demo.md/.txt
+python complaint_letter.py --out my_letter     # -> my_letter.md/.txt
+python complaint_letter.py --gap-minutes 30 --min-mbps 100 --consecutive 12
+```
+
+Every `[BRACKETED]` placeholder in the letter, what it means, and what to
+put there:
+
+| Placeholder | Meaning | Example |
+|---|---|---|
+| `[YOUR NAME]` | Account holder name | Jane Smith |
+| `[ACCOUNT NUMBER]` | ISP account number | 555-0123-8891 |
+| `[ISP NAME]` | Your ISP's name | Acme Fiber |
+| `[SERVICE ADDRESS]` | Address the service is installed at | 123 Main St, Apt 4, Cleveland OH 44113 |
+| `[PLAN_DOWN_MBPS]` | Advertised download speed of your plan | 300 |
+| `[PLAN_UP_MBPS]` | Advertised upload speed of your plan | 20 |
+
+## Local web dashboard
+
+`dashboard.py` serves a single read-only page (stdlib `http.server` only,
+no packages): the latest result, uptime %, recent outage windows, and the
+same SVG chart `speed_report.py` renders. Binds to `127.0.0.1` by default —
+localhost only, no auth needed. Nothing on the page can change state.
+
+```bash
+python dashboard.py                   # build dashboard.html from speedlog.csv
+python dashboard.py --serve           # serve at http://127.0.0.1:8000/
+python dashboard.py --serve --port 8123 --host 127.0.0.1
+python dashboard.py --demo --serve    # sample data, no real tests needed
+```
+
+The page auto-refreshes every 5 minutes. If there's no data yet it tells
+you to run `speedlog.py` (or `--demo`).
+
+## Demo mode
+
+New here and want to see everything in ~30 seconds with no real tests?
+
+```bash
+python dashboard.py --demo --serve    # sample data + sample outage report, served at :8000
+python complaint_letter.py --demo    # sample complaint letter (md + txt)
+```
+
+Demo data is generated deterministically in code (`demo_data.py`): 96
+synthetic tests over 24 hours with one outage window, one sustained
+degradation episode, and two slow blips — same every run. The demo never
+touches your real `speedlog.csv`.
+
+## Setup checker
+
+`check_setup.py` prints plain-English `PASS`/`FAIL` lines (no tracebacks)
+before you schedule the logger:
+
+```bash
+python check_setup.py
+```
+
+```
+PASS: Python version is 3.8 or newer (3.12.3)
+PASS: log directory exists and is writable (/home/chris/speedtest-logger)
+PASS: DNS lookups work (example.com resolves)
+PASS: latency probe reachable (TCP connect to 1.1.1.1:443 ok)
+PASS: download test server reachable (speed.cloudflare.com serves test data)
+
+5 of 5 checks passed
+```
+
+It checks the Python version, that the log directory exists and is
+writable, and that the three things `speedlog.py` actually uses — DNS
+resolution, the TCP latency probe to `1.1.1.1:443`, and the Cloudflare
+download test endpoint — all work from this machine. Exit code 0 when
+everything passes, 1 otherwise.
+
 ## Files
 
 | File | Purpose |
@@ -95,6 +188,10 @@ A failed POST doesn't mark the window as alerted, so it retries next run.
 | `speedlog.py` | The logger — schedule it, let it run |
 | `speed_report.py` | Builds `speed.html` with an SVG chart, stats, and slow-test table |
 | `outage_report.py` | SLA-style outage/degradation report (`outage_report.md`, `outage.html`) + optional webhook alerts |
+| `complaint_letter.py` | ISP complaint letter from outage data (`complaint_letter.md`, `complaint_letter.txt`) |
+| `dashboard.py` | Local read-only web dashboard (stdlib `http.server`; `--serve --port 8000`) |
+| `check_setup.py` | Prerequisite checker — plain-English PASS/FAIL lines |
+| `demo_data.py` | Deterministic synthetic data generator for `--demo` modes |
 | `.outage_state.json` | Last-analyzed timestamp for alert dedupe (created on first run, git-ignored) |
 | `speedlog.csv` | Raw measurements (created on first run, git-ignored) |
 
