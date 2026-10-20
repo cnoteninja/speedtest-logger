@@ -9,6 +9,10 @@ when the connection dips, instead of debating vibes.
 Built for field engineers troubleshooting intermittent internet complaints.
 Zero dependencies.
 
+![Speedtest Logger dashboard (demo data)](demo.png)
+
+*The dashboard on demo data. Live demos: https://cnoteninja.github.io/Portfolio/*
+
 ## Quick start
 
 ```bash
